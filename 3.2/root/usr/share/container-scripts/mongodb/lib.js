@@ -1,4 +1,5 @@
 var log;
+var prettyjson;
 var soon;
 
 (function() {
@@ -13,6 +14,11 @@ var soon;
         var now = new Date().toISOString();
         print(`=> ${now} ${msg}`);
     };
+
+    // prettyjson returns a pretty-formatted JSON string from obj.
+    prettyjson = function(obj) {
+        return JSON.stringify(obj, null, 2);
+    }
 
     // soon calls f until it returns true or the timeout is met. It returns true
     // if f succeeded or false in case of a timeout.
