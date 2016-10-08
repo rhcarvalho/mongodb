@@ -26,13 +26,16 @@ readonly MEMBER_ID="${HOSTNAME##*-}"
 # Need to change current directory to access javascript files.
 cd "${CONTAINER_SCRIPTS_PATH}"
 
+fqdn=$(hostname -f)
+
 # Initialize replica set only if we're the first member
 if [ "${MEMBER_ID}" = '0' ]; then
-  mongo --shell --quiet replicaset.js <<<'initiate()'
+  mongo --shell --quiet \
+    replicaset.js <<<"initiate('${fqdn}')"
   create_users
 else
   mongo --shell --quiet \
     --host "$(replset_addr)" \
     -u admin -p "${MONGODB_ADMIN_PASSWORD}" --authenticationDatabase admin \
-    replicaset.js <<<'addMember()'
+    replicaset.js <<<"addMember('${fqdn}')"
 fi

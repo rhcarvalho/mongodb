@@ -8,14 +8,21 @@ var addMember;
 (function() {
     "use strict";
 
-    var States = {
-        1: "PRIMARY",
-        2: "SECONDARY",
-    };
+    var defaultPort = 27017;
 
     function isPrimary() {
         var isMaster = db.isMaster();
         return isMaster.ismaster && (isMaster.me === isMaster.primary);
+    }
+
+    function hostHasState(host, states) {
+        return rs.status().members.some((m) =>
+            m.name.startsWith(host) && (states.indexOf(m.stateStr) > -1));
+    }
+
+    function getStateStr(host) {
+        return (rs.status().members.filter((m) =>
+            m.name.startsWith(host)) || [])[0].stateStr;
     }
 
     // initiate initializes a replica set. It is safe to call this function if a
@@ -63,26 +70,30 @@ var addMember;
     // safe to call this function if the host is already in the configuration.
     addMember = function(host) {
         host = host || getHostName();
+
+        var alreadyAdded = rs.conf().members.some((m) =>
+            m.host === host || m.host === host + ":" + defaultPort);
+
+        if (alreadyAdded) {
+            log(`Host '${host}' already in replica set, skipping`);
+            return;
+        }
+
         log(`Adding '${host}' to replica set...`);
 
-        // https://github.com/mongodb/mongo/blob/r3.2.6/src/mongo/base/error_codes.err#L105
-        var NewReplicaSetConfigurationIncompatible = 103;
-
         var ret = rs.add(host);
-
-        // check error, ignore error when host is already in the replica set.
-        if (!ret.ok && ret.code !== NewReplicaSetConfigurationIncompatible) {
+        if (!ret.ok) {
             log(`Failed to add replica set member: ${prettyjson(ret)}`)
-            return false;
+            return;
         }
 
         log(`Successfully added '${host}' to replica set`);
 
         // wait until replica set member starts up.
-        var ok = soon(() => isPrimary() || isSecondary());
-        var state = States[rs.status().myState];
+        var ok = soon(() => hostHasState(host, ["PRIMARY", "SECONDARY"]));
+        var state = getStateStr(host);
         if (ok) {
-            log(`Replica set member became ${state}`);
+            log(`Replica set member is now ${state}`);
         } else {
             log(`Timed out waiting for PRIMARY or SECONDARY, member state is ${state}`);
         }
